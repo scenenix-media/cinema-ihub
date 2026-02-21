@@ -1,11 +1,14 @@
-import { SignedIn, SignedOut, UserButton } from '@clerk/nextjs'
-import Link from "next/link";
+import Link from 'next/link'
+import { auth, signIn, signOut } from '@/auth'
 
-export default function Navbar() {
+export default async function Navbar() {
+  const session = await auth()
+
   return (
     <nav className="flex items-center justify-between px-12 py-5 border-b border-zinc-800">
+      
       {/* LOGO */}
-      <div className="flex items-center gap-3">
+      <Link href="/" className="flex items-center gap-3">
         <div className="w-8 h-8 bg-yellow-600 rounded-sm flex items-center justify-center">
           <span className="text-black font-bold text-sm">C</span>
         </div>
@@ -13,7 +16,7 @@ export default function Navbar() {
           <div className="text-white text-sm font-medium tracking-wider">CINEMA</div>
           <div className="text-yellow-600 text-xs tracking-widest">iHUB</div>
         </div>
-      </div>
+      </Link>
 
       {/* NAV LINKS */}
       <div className="flex items-center gap-8">
@@ -23,31 +26,47 @@ export default function Navbar() {
         <Link href="/dashboard" className="text-zinc-400 text-xs tracking-widest uppercase hover:text-white transition-colors">Dashboard</Link>
       </div>
 
-      {/* BUTTONS */}
+      {/* AUTH BUTTONS */}
       <div className="flex items-center gap-3">
-        <SignedOut>
-          <a href="/sign-in">
-            <button className="text-zinc-400 text-xs tracking-widest uppercase px-5 py-2 border border-zinc-700 rounded-sm hover:border-zinc-500 hover:text-white transition-colors">
-              Sign In
-            </button>
-          </a>
-          <a href="/sign-up">
-            <button className="bg-yellow-600 text-black text-xs tracking-widest uppercase px-5 py-2 rounded-sm font-medium hover:bg-yellow-500 transition-colors">
-              Start Free
-            </button>
-          </a>
-        </SignedOut>
-        
-        <SignedIn>
-          <UserButton 
-            appearance={{
-              elements: {
-                avatarBox: 'w-8 h-8'
-              }
-            }}
-          />
-        </SignedIn>
+        {!session ? (
+          <>
+            <form action={async () => {
+              'use server'
+              await signIn('google')
+            }}>
+              <button type="submit" className="text-zinc-400 text-xs tracking-widest uppercase px-5 py-2 border border-zinc-700 rounded-sm hover:border-zinc-500 hover:text-white transition-colors">
+                Sign In
+              </button>
+            </form>
+            <form action={async () => {
+              'use server'
+              await signIn('google')
+            }}>
+              <button type="submit" className="bg-yellow-600 text-black text-xs tracking-widest uppercase px-5 py-2 rounded-sm font-medium hover:bg-yellow-500 transition-colors">
+                Start Free
+              </button>
+            </form>
+          </>
+        ) : (
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              {session.user?.image && (
+                <img src={session.user.image} alt={session.user.name || ''} className="w-8 h-8 rounded-full" />
+              )}
+              <span className="text-white text-sm">{session.user?.name}</span>
+            </div>
+            <form action={async () => {
+              'use server'
+              await signOut()
+            }}>
+              <button type="submit" className="text-zinc-400 text-xs tracking-widest uppercase px-4 py-2 border border-zinc-700 rounded-sm hover:border-zinc-500 hover:text-white transition-colors">
+                Sign Out
+              </button>
+            </form>
+          </div>
+        )}
       </div>
+
     </nav>
-  );
+  )
 }
