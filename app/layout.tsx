@@ -1,20 +1,17 @@
 import type { Metadata } from 'next'
+import { AuthProvider } from '../components/Providers'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Cinema iHub — Professional AI Video Studio',
-  description: 'Generate cinematic-grade video with AI',
+  title: 'Cinema iHub',
+  description: 'Professional AI Video Studio',
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className="bg-black antialiased">
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   )
