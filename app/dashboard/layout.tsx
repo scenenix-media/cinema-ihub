@@ -1,4 +1,7 @@
 import Link from 'next/link'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
+import { redirect } from 'next/navigation'
 
 const sidebarLinks = [
   { href: '/dashboard',          icon: '◈', label: 'Overview'       },
@@ -7,11 +10,42 @@ const sidebarLinks = [
   { href: '/generate',           icon: '+', label: 'New Generation'  },
 ]
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const session = await auth()
+  
+  if (!session?.user?.email) {
+    redirect('/sign-in')
+  }
+
+  // Get user data from database
+  const user = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      image: true,
+      credits: true,
+      plan: true,
+    }
+  })
+
+  if (!user) {
+    redirect('/sign-in')
+  }
+
+  // Calculate monthly credit limit based on plan
+  const creditLimits: Record<string, number> = {
+    free: 10,
+    studio: 100,
+    director: 500,
+  }
+  const monthlyLimit = creditLimits[user.plan] || 10
+
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col">
 
@@ -28,12 +62,16 @@ export default function DashboardLayout({
         </Link>
 
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-sm bg-linear-to-br from-yellow-500 to-yellow-700 flex items-center justify-center">
-            <span className="text-black text-sm font-bold">A</span>
-          </div>
+          {user.image && (
+            <img 
+              src={user.image} 
+              alt={user.name || ''} 
+              className="w-8 h-8 rounded-full"
+            />
+          )}
           <div>
-            <div className="text-white text-xs font-medium">Amara Chen</div>
-            <div className="text-zinc-500 text-xs">Studio Pro</div>
+            <div className="text-white text-xs font-medium">{user.name}</div>
+            <div className="text-zinc-500 text-xs capitalize">{user.plan} Plan</div>
           </div>
         </div>
       </nav>
@@ -47,10 +85,15 @@ export default function DashboardLayout({
           <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-3 mb-4">
             <div className="flex justify-between items-center mb-2">
               <span className="text-zinc-400 text-xs">Monthly Credits</span>
-              <span className="text-yellow-500 text-xs font-medium">47/100</span>
+              <span className="text-yellow-500 text-xs font-medium">
+                {user.credits}/{monthlyLimit}
+              </span>
             </div>
             <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
-              <div className="h-full bg-linear-to-r from-yellow-600 to-yellow-400 rounded-full" style={{ width: '47%' }} />
+              <div 
+                className="h-full bg-linear-to-r from-yellow-600 to-yellow-400 rounded-full" 
+                style={{ width: `${Math.min((user.credits / monthlyLimit) * 100, 100)}%` }} 
+              />
             </div>
           </div>
 
@@ -69,19 +112,21 @@ export default function DashboardLayout({
           <div className="h-px bg-zinc-800 my-2" />
 
           {/* UPGRADE BOX */}
-          <div className="mt-auto bg-yellow-600/10 border border-yellow-600/20 rounded-sm p-3">
-            <div className="text-yellow-500 text-xs font-medium mb-1">Upgrade to Director</div>
-            <div className="text-zinc-400 text-xs leading-relaxed mb-3">Unlock 4K renders & API access</div>
-            <Link href="/pricing">
-              <button className="w-full bg-yellow-600 text-black text-xs py-1.5 rounded-sm font-medium hover:bg-yellow-500 transition-colors">
-                Upgrade Now
-              </button>
-            </Link>
-          </div>
+          {user.plan === 'free' && (
+            <div className="mt-auto bg-yellow-600/10 border border-yellow-600/20 rounded-sm p-3">
+              <div className="text-yellow-500 text-xs font-medium mb-1">Upgrade to Studio</div>
+              <div className="text-zinc-400 text-xs leading-relaxed mb-3">Get 100 credits/month & 1080p exports</div>
+              <Link href="/pricing">
+                <button className="w-full bg-yellow-600 text-black text-xs py-1.5 rounded-sm font-medium hover:bg-yellow-500 transition-colors">
+                  Upgrade Now
+                </button>
+              </Link>
+            </div>
+          )}
 
         </aside>
 
-        {/* MAIN CONTENT — children goes here */}
+        {/* MAIN CONTENT */}
         <main className="flex-1 overflow-y-auto">
           {children}
         </main>
