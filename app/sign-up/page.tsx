@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import Footer from '@/components/Footer'
 import Link from 'next/link'
 
 export default function SignUpPage() {
@@ -176,6 +177,7 @@ export default function SignUpPage() {
           </p>
         </div>
       </div>
+    <Footer />
     </div>
   )
 }

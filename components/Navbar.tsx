@@ -1,11 +1,14 @@
 import Link from 'next/link'
 import { auth } from '@/auth'
+import { handleSignOut } from '@/app/actions/auth'
 
 export default async function Navbar() {
   const session = await auth()
 
   return (
     <nav className="flex items-center justify-between px-12 py-5 border-b border-zinc-800">
+      
+      {/* LOGO */}
       <Link href="/" className="flex items-center gap-3">
         <div className="w-8 h-8 bg-yellow-600 rounded-sm flex items-center justify-center">
           <span className="text-black font-bold text-sm">C</span>
@@ -16,6 +19,7 @@ export default async function Navbar() {
         </div>
       </Link>
 
+      {/* NAV LINKS */}
       <div className="flex items-center gap-8">
         <Link href="/generate" className="text-zinc-400 text-xs tracking-widest uppercase hover:text-white transition-colors">Generate</Link>
         <Link href="/gallery" className="text-zinc-400 text-xs tracking-widest uppercase hover:text-white transition-colors">Gallery</Link>
@@ -23,6 +27,7 @@ export default async function Navbar() {
         <Link href="/dashboard" className="text-zinc-400 text-xs tracking-widest uppercase hover:text-white transition-colors">Dashboard</Link>
       </div>
 
+      {/* AUTH BUTTONS */}
       <div className="flex items-center gap-3">
         {!session?.user ? (
           <>
@@ -39,11 +44,7 @@ export default async function Navbar() {
               <img src={session.user.image} alt="" className="w-8 h-8 rounded-full" />
             )}
             <span className="text-white text-sm">{session.user.name}</span>
-            <form action={async () => {
-              'use server'
-              const { signOut } = await import('@/auth')
-              await signOut()
-            }}>
+            <form action={handleSignOut}>
               <button type="submit" className="text-zinc-400 text-xs tracking-widest uppercase px-4 py-2 border border-zinc-700 rounded-sm hover:border-zinc-500 hover:text-white transition-colors">
                 Sign Out
               </button>
@@ -51,6 +52,7 @@ export default async function Navbar() {
           </div>
         )}
       </div>
+
     </nav>
   )
 }
