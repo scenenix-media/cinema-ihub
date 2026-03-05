@@ -21,6 +21,7 @@ export default async function Navbar() {
 
       {/* NAV LINKS */}
       <div className="flex items-center gap-8">
+        <Link href="/" className="text-zinc-400 text-xs tracking-widest uppercase hover:text-white transition-colors">Home</Link>
         <Link href="/generate" className="text-zinc-400 text-xs tracking-widest uppercase hover:text-white transition-colors">Generate</Link>
         <Link href="/gallery" className="text-zinc-400 text-xs tracking-widest uppercase hover:text-white transition-colors">Gallery</Link>
         <Link href="/pricing" className="text-zinc-400 text-xs tracking-widest uppercase hover:text-white transition-colors">Pricing</Link>
