@@ -1,23 +1,19 @@
+// app/api/generate/route.ts
+
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-
-// Sample cinematic stock videos (free to use)
-const SAMPLE_VIDEOS = [
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-]
+import { getEngine, VideoEngine } from '@/lib/video-engines'
 
 export async function POST(request: Request) {
   try {
-    // 1. Authenticate user
+    // 1. Auth
     const session = await auth()
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // 2. Get user from database
+    // 2. Get user
     const user = await prisma.user.findUnique({
       where: { email: session.user.email }
     })
@@ -26,9 +22,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    // 3. Parse request body
+    // 3. Parse request
     const body = await request.json()
-    const { prompt, style, camera, aspectRatio, duration, engine } = body
+    const { prompt, style, aspectRatio, duration, engine } = body
 
     // 4. Validate prompt
     if (!prompt || prompt.trim().length < 10) {
@@ -38,10 +34,31 @@ export async function POST(request: Request) {
       )
     }
 
-    // 5. Calculate credit cost (2 credits per 5 seconds)
-    const creditCost = Math.max(2, Math.ceil((duration || 8) / 5) * 2)
+    // 5. Determine engine (default to first available in user's plan)
+    const selectedEngine: VideoEngine = engine || user.engines[0] || 'pika'
+    
+    // 6. Check user has access to this engine
+    if (!user.engines.includes(selectedEngine)) {
+      return NextResponse.json(
+        { 
+          error: `${selectedEngine} not available on ${user.plan} plan`,
+          availableEngines: user.engines,
+          upgrade: 'Upgrade to access more engines'
+        },
+        { status: 403 }
+      )
+    }
 
-    // 6. Check credits
+    // 7. Get engine adapter
+    const engineAdapter = getEngine(selectedEngine)
+
+    // 8. Validate duration for this engine
+    const validDuration = Math.min(duration || 5, engineAdapter.maxDuration)
+
+    // 9. Calculate credits
+    const creditCost = Math.ceil(validDuration / 5) * 2
+
+    // 10. Check credits
     if (user.credits < creditCost) {
       return NextResponse.json(
         { 
@@ -53,74 +70,134 @@ export async function POST(request: Request) {
       )
     }
 
-    // 7. Create generation record
+    console.log(`🎬 Starting ${selectedEngine} generation for ${user.email}`)
+    console.log(`   Prompt: ${prompt.substring(0, 50)}...`)
+    console.log(`   Duration: ${validDuration}s | Credits: ${creditCost}`)
+
+    // 11. Call AI engine
+    const task = await engineAdapter.generate({
+      prompt,
+      duration: validDuration,
+      aspectRatio: aspectRatio || '16:9',
+      style,
+      resolution: user.resolution
+    })
+
+    console.log(`✅ ${selectedEngine} task created: ${task.id}`)
+
+    // 12. Create generation record
     const generation = await prisma.generation.create({
       data: {
         prompt,
-        engine: engine || 'runway',
+        engine: selectedEngine,
         style: style || 'Cinematic',
         aspectRatio: aspectRatio || '16:9',
-        duration: duration || 8,
-        resolution: user.plan === 'free' ? '720p' : user.plan === 'studio' ? '1080p' : '4K',
+        duration: validDuration,
+        resolution: user.resolution,
         status: 'processing',
         credits: creditCost,
         userId: user.id,
-        engineJobId: `mock_${Date.now()}`, // Mock task ID
+        engineJobId: task.id,
       }
     })
 
-    // 8. Deduct credits
+    // 13. Deduct credits
     await prisma.user.update({
       where: { id: user.id },
       data: { credits: { decrement: creditCost } }
     })
 
-    console.log(`✅ Mock generation ${generation.id} started for ${user.email}`)
-    console.log(`   Prompt: ${prompt}`)
-    console.log(`   Credits used: ${creditCost} | Remaining: ${user.credits - creditCost}`)
+    console.log(`   Credits remaining: ${user.credits - creditCost}`)
 
-    // 9. Simulate AI processing in background
-    // In a real app, this would be a queue job. For mock, we use setTimeout
-    setTimeout(async () => {
-      try {
-        // Pick a random sample video
-        const sampleVideo = SAMPLE_VIDEOS[Math.floor(Math.random() * SAMPLE_VIDEOS.length)]
-        
-        await prisma.generation.update({
-          where: { id: generation.id },
-          data: {
-            status: 'complete',
-            videoUrl: sampleVideo
-          }
-        })
-        
-        console.log(`✅ Mock generation ${generation.id} completed`)
-      } catch (error) {
-        console.error(`❌ Mock generation ${generation.id} failed:`, error)
-        await prisma.generation.update({
-          where: { id: generation.id },
-          data: {
-            status: 'failed',
-            errorMessage: 'Mock generation error'
-          }
-        })
-      }
-    }, 30000 + Math.random() * 20000) // Complete after 30-50 seconds (realistic timing)
+    // 14. Start polling in background
+    pollTaskCompletion(generation.id, task.id, selectedEngine).catch(error => {
+      console.error(`❌ Polling error for ${generation.id}:`, error)
+    })
 
     return NextResponse.json({
       success: true,
       generationId: generation.id,
+      taskId: task.id,
+      engine: selectedEngine,
       creditsUsed: creditCost,
       creditsRemaining: user.credits - creditCost,
-      estimatedTime: '30-50 seconds',
-      message: '🎬 Generation started (mock mode - using sample video)'
+      estimatedTime: `${validDuration * 6}-${validDuration * 10} seconds`,
+      message: `🎬 Generation started with ${selectedEngine}`
     })
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Generation API error:', error)
+    
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: error.message || 'Internal server error' },
       { status: 500 }
     )
   }
+}
+
+async function pollTaskCompletion(generationId: string, taskId: string, engineName: VideoEngine) {
+  const maxAttempts = 80 // ~7 minutes max
+  let attempts = 0
+
+  const poll = async () => {
+    try {
+      attempts++
+      
+      const engine = getEngine(engineName)
+      const task = await engine.getStatus(taskId)
+
+      console.log(`📊 ${engineName} ${taskId}: ${task.status} (${attempts}/${maxAttempts})`)
+
+      if (task.status === 'complete' && task.videoUrl) {
+        await prisma.generation.update({
+          where: { id: generationId },
+          data: {
+            status: 'complete',
+            videoUrl: task.videoUrl,
+            thumbnailUrl: task.thumbnailUrl
+          }
+        })
+        
+        console.log(`✅ ${engineName} generation ${generationId} complete!`)
+        return
+      }
+
+      if (task.status === 'failed') {
+        await prisma.generation.update({
+          where: { id: generationId },
+          data: {
+            status: 'failed',
+            errorMessage: task.error || 'Generation failed'
+          }
+        })
+        
+        console.error(`❌ ${engineName} generation ${generationId} failed:`, task.error)
+        return
+      }
+
+      if (task.status === 'processing' || task.status === 'pending') {
+        if (attempts >= maxAttempts) {
+          throw new Error('Task timeout after 7 minutes')
+        }
+        
+        // Poll every 5 seconds
+        setTimeout(poll, 5000)
+        return
+      }
+
+    } catch (error) {
+      console.error(`❌ Polling error for ${generationId}:`, error)
+      
+      await prisma.generation.update({
+        where: { id: generationId },
+        data: {
+          status: 'failed',
+          errorMessage: error instanceof Error ? error.message : 'Unknown error'
+        }
+      })
+    }
+  }
+
+  // Start polling
+  poll()
 }

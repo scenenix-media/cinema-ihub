@@ -150,13 +150,13 @@ export default function PricingClient() {
                 : 'border border-zinc-800'
             }`}
           >
-            {plan.label && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <span className="px-3 py-1 bg-yellow-600 text-black text-xs tracking-wider uppercase rounded-sm font-medium">
-                  {plan.label}
-                </span>
-              </div>
-            )}
+              {plan.label && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
+                  <span className="px-3 py-1 bg-yellow-600 text-black text-xs tracking-wider uppercase rounded-sm font-medium shadow-lg">
+                    {plan.label}
+                  </span>
+                </div>
+              )}
 
             <div className={`p-6 ${plan.label ? 'pt-8' : ''}`}>
               {/* PLAN NAME */}

@@ -1,3 +1,6 @@
+// app/api/auth/signup/route.ts
+
+import { getPlanLimits } from '@/lib/planLimits'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
@@ -14,7 +17,7 @@ export async function POST(request: Request) {
       )
     }
 
-    if (password.length < 8) {
+    if (typeof password !== 'string' || password.length < 8) {
       return NextResponse.json(
         { error: 'Password must be at least 8 characters' },
         { status: 400 }
@@ -33,17 +36,39 @@ export async function POST(request: Request) {
       )
     }
 
-    // Hash password
+    // Hash password FIRST
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    // Create user
+    // Apply plan limits
+    const planLimits = getPlanLimits('free')
+
+    // Create user ONCE
     const user = await prisma.user.create({
       data: {
         name,
         email,
         password: hashedPassword,
-        credits: 10,
+
         plan: 'free',
+        credits: planLimits.credits,
+        monthlyLimit: planLimits.monthlyLimit,
+
+        storageUsed: 0,
+        storageLimit: planLimits.storageLimit,
+
+        resolution: planLimits.resolution,
+        engines: planLimits.engines,
+
+        stylePresetsLimit: planLimits.stylePresetsLimit,
+        projectsLimit: planLimits.projectsLimit,
+
+        apiAccess: planLimits.apiAccess,
+        customLUTImport: planLimits.customLUTImport,
+        reviewPortal: planLimits.reviewPortal,
+        prioritySupport: planLimits.prioritySupport,
+
+        teamSeats: planLimits.teamSeats,
+        whiteLabel: planLimits.whiteLabel,
       }
     })
 
@@ -57,7 +82,6 @@ export async function POST(request: Request) {
         name: user.name,
       }
     })
-
   } catch (error) {
     console.error('Signup error:', error)
     return NextResponse.json(

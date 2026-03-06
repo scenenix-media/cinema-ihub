@@ -3,6 +3,7 @@
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { getEngine, VideoEngine } from '@/lib/video-engines'
 
 export async function GET(
   request: Request,
@@ -14,30 +15,40 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // IMPORTANT: Await params before accessing properties
     const params = await context.params
-    const generationId = params.id
-
     const generation = await prisma.generation.findUnique({
-      where: { id: generationId }
+      where: { id: params.id }
     })
 
     if (!generation) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
-    // Calculate mock progress based on time elapsed
-    const createdAt = new Date(generation.createdAt).getTime()
-    const now = Date.now()
-    const elapsed = now - createdAt
-    const estimatedTotal = 40000 // 40 seconds average
-    const progress = Math.min(95, Math.floor((elapsed / estimatedTotal) * 100))
+    // If still processing, try to get live status from engine
+    if (generation.status === 'processing' && generation.engineJobId) {
+      try {
+        const engine = getEngine(generation.engine as VideoEngine)
+        const task = await engine.getStatus(generation.engineJobId)
+        
+        return NextResponse.json({
+          status: task.status,
+          videoUrl: task.videoUrl,
+          progress: task.progress,
+          error: task.error,
+          engine: generation.engine
+        })
+      } catch (error) {
+        console.error('Error fetching live status:', error)
+        // Fall through to return DB status
+      }
+    }
 
+    // Return status from database
     return NextResponse.json({
       status: generation.status,
-      progress: generation.status === 'processing' ? progress : 100,
       videoUrl: generation.videoUrl,
-      error: generation.errorMessage
+      error: generation.errorMessage,
+      engine: generation.engine
     })
 
   } catch (error) {

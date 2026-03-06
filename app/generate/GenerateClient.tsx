@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cinematicStyles } from '@/lib/styles'
 
+const [selectedEngine, setSelectedEngine] = useState('pika')
 const STYLES = cinematicStyles.map(s => s.name)
 
 const CAMERAS = [
@@ -48,7 +49,7 @@ export default function GenerateClient() {
           camera: selectedCamera,
           aspectRatio: selectedRatio,
           duration,
-          engine: 'runway'
+          engine: selectedEngine
         })
       })
 
@@ -168,6 +169,31 @@ export default function GenerateClient() {
             ))}
           </div>
         </div>
+
+      {/* ENGINE SELECTOR */}
+      <div>
+        <label className="text-zinc-400 text-xs tracking-wider uppercase mb-2 block">
+          AI Engine
+        </label>
+        <select
+          value={selectedEngine}
+          onChange={(e) => setSelectedEngine(e.target.value)}
+          className="w-full bg-zinc-800 border border-zinc-700 text-white px-4 py-3 rounded-sm text-sm focus:outline-none focus:border-yellow-600"
+        >
+          {(user?.engines || ['pika']).map((eng: string) => (
+            <option key={eng} value={eng}>
+              {eng.charAt(0).toUpperCase() + eng.slice(1)}
+              {eng === 'runway' && ' - Premium Quality'}
+              {eng === 'luma' && ' - High Quality'}
+              {eng === 'pika' && ' - Fast Generation'}
+              {eng === 'veo' && ' - Google AI'}
+            </option>
+          ))}
+        </select>
+        <p className="text-zinc-600 text-xs mt-1">
+          Available on your {user?.plan || 'free'} plan
+        </p>
+      </div>
 
         {/* CAMERA */}
         <div>
