@@ -57,7 +57,7 @@ export async function POST(request: Request) {
         storageLimit: planLimits.storageLimit,
 
         resolution: planLimits.resolution,
-        engines: planLimits.engines,
+        engines: [...planLimits.engines],
 
         stylePresetsLimit: planLimits.stylePresetsLimit,
         projectsLimit: planLimits.projectsLimit,
