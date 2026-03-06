@@ -1,10 +1,12 @@
+// app/dashboard/page.tsx
+
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 
 export default async function DashboardPage() {
   const session = await auth()
-  
   if (!session?.user?.email) {
     redirect('/sign-in')
   }
@@ -12,18 +14,24 @@ export default async function DashboardPage() {
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
     include: {
-      projects: {
-        take: 3,
-        orderBy: { updatedAt: 'desc' },
-        include: {
-          _count: {
-            select: { generations: true }
-          }
+      _count: {
+        select: {
+          generations: true,
+          projects: true
         }
       },
       generations: {
-        take: 10,
-        orderBy: { createdAt: 'desc' }
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          prompt: true,
+          status: true,
+          videoUrl: true,
+          createdAt: true,
+          engine: true,
+          duration: true
+        }
       }
     }
   })
@@ -32,149 +40,138 @@ export default async function DashboardPage() {
     redirect('/sign-in')
   }
 
-  // Calculate stats
-  const totalGenerations = await prisma.generation.count({
-    where: { userId: user.id }
+  const completedCount = await prisma.generation.count({
+    where: { userId: user.id, status: 'complete' }
   })
 
-  const storageUsed = 0 // TODO: Calculate from video file sizes when implemented
-  const watchTime = totalGenerations * 8 // Rough estimate: avg 8 seconds per video
-
-  const stats = [
-    { label: 'Total Videos',  value: totalGenerations.toString(), sub: `${user.plan} plan` },
-    { label: 'Storage Used',  value: `${storageUsed} GB`, sub: 'of 200 GB' },
-    { label: 'Watch Time',    value: `${Math.round(watchTime / 60)} min`, sub: 'all projects' },
-    { label: 'Credits Left',  value: user.credits.toString(), sub: 'resets monthly' },
-  ]
-
-  // Get current hour for greeting
-  const hour = new Date().getHours()
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+  const processingCount = await prisma.generation.count({
+    where: { userId: user.id, status: 'processing' }
+  })
 
   return (
     <div className="p-8">
-
-      {/* PAGE HEADER */}
+      
+      {/* Header */}
       <div className="mb-8">
-        <h1 className="text-white text-2xl font-light">
-          {greeting}, {user.name?.split(' ')[0] || 'there'}
+        <h1 className="text-white text-3xl font-light mb-2">
+          Welcome back, {user.name || 'Creator'}!
         </h1>
-        <p className="text-zinc-500 text-sm mt-1">
-          {totalGenerations === 0 
-            ? "Ready to create your first video?" 
-            : `You've created ${totalGenerations} video${totalGenerations === 1 ? '' : 's'} so far.`
-          }
-        </p>
+        <p className="text-zinc-500">Here's your creative overview</p>
       </div>
 
-      {/* STAT CARDS */}
-      <div className="grid grid-cols-4 gap-4 mb-10">
-        {stats.map((stat, i) => (
-          <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-sm p-5 hover:border-zinc-600 transition-colors">
-            <div className="text-zinc-400 text-xs tracking-widest uppercase mb-3">{stat.label}</div>
-            <div className="text-white text-3xl font-light mb-1">{stat.value}</div>
-            <div className="text-zinc-600 text-xs">{stat.sub}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* RECENT PROJECTS */}
-      <div className="mb-10">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-white text-sm tracking-widest uppercase">Recent Projects</h2>
-          <button className="text-zinc-400 text-xs border border-zinc-700 px-3 py-1.5 rounded-sm hover:border-zinc-500 hover:text-white transition-colors">
-            New Project
-          </button>
+      {/* Quick Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        
+        <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-6">
+          <p className="text-zinc-500 text-xs mb-2">Available Credits</p>
+          <p className="text-white text-3xl font-light mb-1">{user.credits}</p>
+          <p className="text-zinc-600 text-xs">of {user.monthlyLimit} this month</p>
         </div>
 
-        {user.projects.length === 0 ? (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-12 text-center">
-            <p className="text-zinc-500 text-sm mb-4">No projects yet</p>
-            <a href="/generate">
-              <button className="bg-yellow-600 text-black text-xs tracking-widest uppercase px-6 py-2 rounded-sm font-medium hover:bg-yellow-500 transition-colors">
-                Create Your First Project
-              </button>
-            </a>
-          </div>
-        ) : (
-          <div className="grid grid-cols-3 gap-4">
-            {user.projects.map((project) => (
-              <div key={project.id} className="bg-zinc-900 border border-zinc-800 rounded-sm overflow-hidden hover:border-zinc-600 transition-colors cursor-pointer">
-                <div className="aspect-video bg-linear-to-br from-zinc-800 to-zinc-900" />
-                <div className="p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="text-white text-sm font-medium">{project.name}</div>
-                    <span className={`text-xs px-2 py-0.5 rounded-sm ${
-                      project.status === 'complete'
-                        ? 'bg-green-900/50 text-green-400 border border-green-800'
-                        : project.status === 'in_progress'
-                        ? 'bg-blue-900/50 text-blue-400 border border-blue-800'
-                        : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
-                    }`}>
-                      {project.status}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500 text-xs">{project._count.generations} videos</span>
-                    <span className="text-zinc-600 text-xs">
-                      {new Date(project.updatedAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* GENERATION HISTORY */}
-      <div>
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-white text-sm tracking-widest uppercase">Generation History</h2>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-6">
+          <p className="text-zinc-500 text-xs mb-2">Total Generations</p>
+          <p className="text-white text-3xl font-light mb-1">{user._count.generations}</p>
+          <p className="text-zinc-600 text-xs">{completedCount} completed</p>
         </div>
 
-        {user.generations.length === 0 ? (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-12 text-center">
-            <p className="text-zinc-500 text-sm mb-4">No generations yet</p>
-            <a href="/generate">
-              <button className="bg-yellow-600 text-black text-xs tracking-widest uppercase px-6 py-2 rounded-sm font-medium hover:bg-yellow-500 transition-colors">
-                Generate Your First Video
-              </button>
-            </a>
-          </div>
-        ) : (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-sm overflow-hidden">
-            {/* TABLE HEADER */}
-            <div className="grid grid-cols-5 px-5 py-3 border-b border-zinc-800 bg-zinc-800/50">
-              {['Prompt', 'Style', 'Duration', 'Engine', 'Status'].map(h => (
-                <div key={h} className="text-zinc-500 text-xs tracking-widest uppercase">{h}</div>
-              ))}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-6">
+          <p className="text-zinc-500 text-xs mb-2">Active Projects</p>
+          <p className="text-white text-3xl font-light mb-1">{user._count.projects}</p>
+          <p className="text-zinc-600 text-xs">across all projects</p>
+        </div>
+
+        <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-6">
+          <p className="text-zinc-500 text-xs mb-2">Processing</p>
+          <p className="text-white text-3xl font-light mb-1">{processingCount}</p>
+          <p className="text-zinc-600 text-xs">videos in queue</p>
+        </div>
+
+      </div>
+
+      {/* Quick Actions */}
+      <div className="mb-8">
+        <h2 className="text-white text-xl font-light mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          
+          <Link href="/dashboard/studio">
+            <div className="bg-yellow-600 hover:bg-yellow-500 p-6 rounded-sm cursor-pointer transition-colors group">
+              <span className="text-3xl mb-3 block">🎬</span>
+              <p className="text-black text-lg font-medium mb-1">Create New Video</p>
+              <p className="text-black/70 text-sm">Start generating with AI</p>
             </div>
-            {/* TABLE ROWS */}
-            {user.generations.map((gen) => (
-              <div
-                key={gen.id}
-                className="grid grid-cols-5 px-5 py-4 border-b border-zinc-800 last:border-0 hover:bg-zinc-800/30 transition-colors cursor-pointer items-center"
-              >
-                <div className="text-white text-sm truncate pr-4">
-                  {gen.prompt.length > 50 ? gen.prompt.substring(0, 50) + '...' : gen.prompt}
+          </Link>
+
+          <Link href="/dashboard/templates">
+            <div className="bg-zinc-900 border border-zinc-800 hover:border-yellow-600/50 p-6 rounded-sm cursor-pointer transition-all group">
+              <span className="text-3xl mb-3 block">📋</span>
+              <p className="text-white text-lg font-medium mb-1">Browse Templates</p>
+              <p className="text-zinc-500 text-sm">Pre-made prompts</p>
+            </div>
+          </Link>
+
+          <Link href="/dashboard/billing">
+            <div className="bg-zinc-900 border border-zinc-800 hover:border-yellow-600/50 p-6 rounded-sm cursor-pointer transition-all group">
+              <span className="text-3xl mb-3 block">💎</span>
+              <p className="text-white text-lg font-medium mb-1">Upgrade Plan</p>
+              <p className="text-zinc-500 text-sm">Get more credits</p>
+            </div>
+          </Link>
+
+        </div>
+      </div>
+
+      {/* Recent Generations */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-white text-xl font-light">Recent Generations</h2>
+          <Link href="/dashboard/history" className="text-yellow-600 hover:text-yellow-500 text-sm">
+            View All →
+          </Link>
+        </div>
+
+        {user.generations.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            {user.generations.map(gen => (
+              <div key={gen.id} className="bg-zinc-900 border border-zinc-800 rounded-sm overflow-hidden hover:border-yellow-600/50 transition-all">
+                {gen.videoUrl ? (
+                  <video
+                    src={gen.videoUrl}
+                    className="w-full aspect-video object-cover"
+                    muted
+                    loop
+                    playsInline
+                  />
+                ) : (
+                  <div className="w-full aspect-video bg-zinc-800 flex items-center justify-center">
+                    <span className="text-zinc-600 text-sm">
+                      {gen.status === 'processing' ? '⏳ Processing...' : '🎬'}
+                    </span>
+                  </div>
+                )}
+                <div className="p-3">
+                  <p className="text-white text-xs line-clamp-2 mb-2">{gen.prompt}</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-600 text-xs">{gen.engine}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-sm ${
+                      gen.status === 'complete' ? 'bg-green-900/20 text-green-400' :
+                      gen.status === 'processing' ? 'bg-yellow-900/20 text-yellow-400' :
+                      'bg-red-900/20 text-red-400'
+                    }`}>
+                      {gen.status}
+                    </span>
+                  </div>
                 </div>
-                <div className="text-zinc-400 text-sm">{gen.style}</div>
-                <div className="text-zinc-400 text-sm">{gen.duration}s</div>
-                <div className="text-zinc-400 text-sm capitalize">{gen.engine}</div>
-                <span className={`text-xs px-2 py-1 rounded-sm w-fit ${
-                  gen.status === 'complete'
-                    ? 'bg-green-900/40 text-green-400 border border-green-800'
-                    : gen.status === 'processing'
-                    ? 'bg-blue-900/40 text-blue-400 border border-blue-800'
-                    : gen.status === 'failed'
-                    ? 'bg-red-900/40 text-red-400 border border-red-800'
-                    : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
-                }`}>
-                  {gen.status}
-                </span>
               </div>
             ))}
+          </div>
+        ) : (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-12 text-center">
+            <p className="text-zinc-500 mb-4">No generations yet</p>
+            <Link href="/dashboard/studio">
+              <button className="bg-yellow-600 text-black text-sm tracking-widest uppercase px-6 py-2 rounded-sm font-medium hover:bg-yellow-500">
+                Create Your First Video
+              </button>
+            </Link>
           </div>
         )}
       </div>

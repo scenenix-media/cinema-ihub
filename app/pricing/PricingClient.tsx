@@ -29,8 +29,8 @@ const plans = [
   {
     id: 'studio',
     name: 'STUDIO',
-    monthlyPrice: 39,
-    annualPrice: 29,
+    monthlyPrice: 2999,
+    annualPrice: 2249,
     label: 'Most Popular',
     description: 'For serious creators and agencies',
     generations: '100 generations/mo',
@@ -49,8 +49,8 @@ const plans = [
   {
     id: 'director',
     name: 'DIRECTOR',
-    monthlyPrice: 89,
-    annualPrice: 67,
+    monthlyPrice: 7999,
+    annualPrice: 5999,
     label: null,
     description: 'For professional studios and agencies',
     generations: '500 generations/mo',
@@ -169,7 +169,7 @@ export default function PricingClient() {
                 ) : (
                   <>
                     <span className="text-white text-4xl font-light">
-                      ${isAnnual ? plan.annualPrice : plan.monthlyPrice}
+                      ₹{isAnnual ? plan.annualPrice.toLocaleString('en-IN') : plan.monthlyPrice.toLocaleString('en-IN')}
                     </span>
                     <span className="text-zinc-500 text-sm ml-1">/mo</span>
                   </>

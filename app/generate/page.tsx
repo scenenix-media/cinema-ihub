@@ -1,3 +1,5 @@
+// app/generate/page.tsx
+
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import GenerateClient from './GenerateClient'

@@ -49,11 +49,20 @@ model User {
   password      String?
   name          String?
   image         String?
+  phone         String?   // For Cashfree 
   emailVerified DateTime?
   plan          String    @default("free") // 'free', 'studio', 'director', 'enterprise'
   credits       Int       @default(10)
   monthlyLimit  Int       @default(10)
   
+  // Subscription fields
+  subscriptionId     String?   // Cashfree subscription ID
+  subscriptionStatus String?   // active, cancelled, expired
+  billingCycle       String?   // monthly, annual
+  subscriptionStart  DateTime?
+  subscriptionEnd    DateTime?
+  autoRenew          Boolean   @default(true)
+
   // Plan Features
   storageUsed       Int       @default(0)        // in MB
   storageLimit      Int       @default(2000)     // in MB (2GB for free)
@@ -76,6 +85,23 @@ model User {
   sessions      Session[]
   projects      Project[]
   generations   Generation[]
+  invoices      Invoice[]  
+}
+
+model Invoice {
+  id            String   @id @default(cuid())
+  userId        String
+  orderId       String   @unique
+  amount        Int      // in paise
+  currency      String   @default("INR")
+  status        String   // pending, paid, failed
+  plan          String   // studio, director, enterprise
+  billingCycle  String   // monthly, annual
+  paymentMethod String?
+  paidAt        DateTime?
+  createdAt     DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Project {

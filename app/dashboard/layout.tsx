@@ -1,14 +1,10 @@
-import Link from 'next/link'
+// app/dashboard/layout.tsx
+
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
-
-const sidebarLinks = [
-  { href: '/dashboard',          icon: '◈', label: 'Overview'       },
-  { href: '/dashboard/projects', icon: '◫', label: 'My Projects'    },
-  { href: '/dashboard/history',  icon: '◎', label: 'All Generations' },
-  { href: '/generate',           icon: '+', label: 'New Generation'  },
-]
+import Link from 'next/link'
+import { DashboardNav } from '@/components/DashboardSidebar'
 
 export default async function DashboardLayout({
   children,
@@ -21,16 +17,20 @@ export default async function DashboardLayout({
     redirect('/sign-in')
   }
 
-  // Get user data from database
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
     select: {
-      id: true,
       name: true,
       email: true,
       image: true,
-      credits: true,
       plan: true,
+      credits: true,
+      monthlyLimit: true,
+      _count: {
+        select: {
+          generations: true
+        }
+      }
     }
   })
 
@@ -38,100 +38,95 @@ export default async function DashboardLayout({
     redirect('/sign-in')
   }
 
-  // Calculate monthly credit limit based on plan
-  const creditLimits: Record<string, number> = {
-    free: 10,
-    studio: 100,
-    director: 500,
-  }
-  const monthlyLimit = creditLimits[user.plan] || 10
+  const navItems = [
+    { href: '/dashboard', label: 'Overview', icon: '📊', exact: true },
+    { href: '/dashboard/studio', label: 'Studio', icon: '🎬', exact: false },
+    { href: '/dashboard/projects', label: 'Projects', icon: '📁', exact: false },
+    { href: '/dashboard/templates', label: 'Templates', icon: '📋', exact: false },
+    { href: '/dashboard/history', label: 'History', icon: '🎞️', exact: false },
+    { href: '/dashboard/billing', label: 'Billing', icon: '💳', exact: false },
+    { href: '/dashboard/settings', label: 'Settings', icon: '⚙️', exact: false },
+  ]
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col">
-
-      {/* TOP NAV */}
-      <nav className="flex items-center justify-between px-8 py-4 border-b border-zinc-800 bg-zinc-950">
-        <Link href="/" className="flex items-center gap-3">
-          <div className="w-7 h-7 bg-yellow-600 rounded-sm flex items-center justify-center">
-            <span className="text-black font-bold text-xs">C</span>
-          </div>
-          <div>
-            <div className="text-white text-xs font-medium tracking-wider">CINEMA</div>
-            <div className="text-yellow-600 text-xs tracking-widest" style={{fontSize:'9px'}}>iHUB</div>
-          </div>
-        </Link>
-
-        <div className="flex items-center gap-3">
-          {user.image && (
-            <img 
-              src={user.image} 
-              alt={user.name || ''} 
-              className="w-8 h-8 rounded-full"
-            />
-          )}
-          <div>
-            <div className="text-white text-xs font-medium">{user.name}</div>
-            <div className="text-zinc-500 text-xs capitalize">{user.plan} Plan</div>
-          </div>
-        </div>
-      </nav>
-
-      <div className="flex flex-1">
-
-        {/* SIDEBAR */}
-        <aside className="w-56 border-r border-zinc-800 bg-zinc-950 p-4 flex flex-col gap-1">
-
-          {/* CREDITS BOX */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-3 mb-4">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-zinc-400 text-xs">Monthly Credits</span>
-              <span className="text-yellow-500 text-xs font-medium">
-                {user.credits}/{monthlyLimit}
-              </span>
+    <div className="min-h-screen bg-black flex">
+      
+      {/* Sidebar */}
+      <aside className="w-64 border-r border-zinc-800 bg-zinc-950 flex flex-col">
+        
+        {/* Logo */}
+        <div className="p-6 border-b border-zinc-800">
+          <Link href="/" className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-yellow-600 rounded-sm flex items-center justify-center">
+              <span className="text-black font-bold text-sm">C</span>
             </div>
-            <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+            <span className="text-white text-lg font-medium">Cinema iHub</span>
+          </Link>
+        </div>
+
+        {/* User Info */}
+        <div className="p-6 border-b border-zinc-800">
+          <div className="flex items-center gap-3 mb-4">
+            {user.image ? (
+              <img src={user.image} alt={user.name || ''} className="w-10 h-10 rounded-full" />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center">
+                <span className="text-white text-sm">{user.name?.[0] || user.email[0].toUpperCase()}</span>
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-white text-sm font-medium truncate">{user.name || 'User'}</p>
+              <p className="text-zinc-500 text-xs capitalize">{user.plan} Plan</p>
+            </div>
+          </div>
+          
+          {/* Credits */}
+          <div className="bg-zinc-900 rounded-sm p-3">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-zinc-500 text-xs">Credits</span>
+              <span className="text-yellow-600 text-sm font-medium">{user.credits}</span>
+            </div>
+            <div className="w-full bg-zinc-800 rounded-full h-1.5">
               <div 
-                className="h-full bg-linear-to-r from-yellow-600 to-yellow-400 rounded-full" 
-                style={{ width: `${Math.min((user.credits / monthlyLimit) * 100, 100)}%` }} 
+                className="bg-yellow-600 h-1.5 rounded-full transition-all"
+                style={{ width: `${Math.min((user.credits / user.monthlyLimit) * 100, 100)}%` }}
               />
             </div>
+            <p className="text-zinc-600 text-xs mt-1">of {user.monthlyLimit} this month</p>
           </div>
+        </div>
 
-          {/* NAV LINKS */}
-          {sidebarLinks.map(link => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-sm text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors text-sm group"
-            >
-              <span className="text-zinc-600 group-hover:text-yellow-600 transition-colors text-xs">{link.icon}</span>
-              {link.label}
-            </Link>
-          ))}
+        {/* Navigation */}
+        <nav className="flex-1 p-4">
+          <DashboardNav items={navItems} />
+        </nav>
 
-          <div className="h-px bg-zinc-800 my-2" />
+        {/* Bottom Actions */}
+        <div className="p-4 border-t border-zinc-800 space-y-2">
+          <Link href="/gallery">
+            <button className="w-full text-zinc-400 hover:text-white text-sm py-2 text-left px-4 rounded-sm hover:bg-zinc-800 transition-colors">
+              🌐 Gallery
+            </button>
+          </Link>
+          <Link href="/pricing">
+            <button className="w-full text-zinc-400 hover:text-white text-sm py-2 text-left px-4 rounded-sm hover:bg-zinc-800 transition-colors">
+              💎 Upgrade Plan
+            </button>
+          </Link>
+          <form action="/api/auth/signout" method="POST">
+            <button className="w-full text-red-400 hover:text-red-300 text-sm py-2 text-left px-4 rounded-sm hover:bg-zinc-800 transition-colors">
+              🚪 Sign Out
+            </button>
+          </form>
+        </div>
 
-          {/* UPGRADE BOX */}
-          {user.plan === 'free' && (
-            <div className="mt-auto bg-yellow-600/10 border border-yellow-600/20 rounded-sm p-3">
-              <div className="text-yellow-500 text-xs font-medium mb-1">Upgrade to Studio</div>
-              <div className="text-zinc-400 text-xs leading-relaxed mb-3">Get 100 credits/month & 1080p exports</div>
-              <Link href="/pricing">
-                <button className="w-full bg-yellow-600 text-black text-xs py-1.5 rounded-sm font-medium hover:bg-yellow-500 transition-colors">
-                  Upgrade Now
-                </button>
-              </Link>
-            </div>
-          )}
+      </aside>
 
-        </aside>
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto">
+        {children}
+      </main>
 
-        {/* MAIN CONTENT */}
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
-
-      </div>
     </div>
   )
 }
